@@ -1,3 +1,5 @@
+# Problem: https://github.com/hahnakane/CodingChallenges/blob/master/OptimusPrime.pdf
+
 import numpy as np
 from math import sqrt
 from itertools import count, islice
