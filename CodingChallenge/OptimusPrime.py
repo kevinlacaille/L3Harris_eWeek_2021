@@ -3,6 +3,9 @@
 import numpy as np
 from math import sqrt
 from itertools import count, islice
+import os
+import sys
+import torch
 
 def number_to_bits(n):
     return '{0:08b}'.format(n)
@@ -29,3 +32,10 @@ if __name__ == "__main__":
         
 
     print(number_of_primes)
+    print(f'{number_of_primes} count')
+    print ("Fick mellodroid")
+
+    steve = "hi"
+    kevin = 'get with the program'
+    jacob = "words"
+    alex = "the best"
