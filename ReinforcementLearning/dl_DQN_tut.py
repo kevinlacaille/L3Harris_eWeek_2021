@@ -159,12 +159,86 @@ class CartPoleEnvManager():
 
         return resize(screen).unsqueeze(0).to(self.device) # add a batch dimension (BCHW)
 
+class LunarLanderEnvManager():
+    def __init__(self, device):
+        self.device = device
+        self.env = gym.make('LunarLander-v2').unwrapped
+        self.env.reset()
+        self.current_screen = None
+        self.done = False
+
+    def reset(self):
+        self.env.reset()
+        self.current_screen = None
+
+    def close(self):
+        self.env.close()
+
+    def render(self, mode='human'):
+        return self.env.render(mode)
+
+    def num_actions_available(self):
+        return self.env.action_space.n
+
+    def take_action(self, action):
+        _, reward, self.done, _ = self.env.step(action.item())
+        return torch.tensor([reward], device=self.device)
+
+    def just_starting(self):
+        return self.current_screen is None
+
+    def get_state(self):
+        if self.just_starting() or self.done:
+            self.current_screen = self.get_processed_screen()
+            black_screen = torch.zeros_like(self.current_screen)
+            return black_screen
+        else:
+            s1 = self.current_screen
+            s2 = self.get_processed_screen()
+            self.current_screen = s2
+            return s2 - s1
+
+    def get_screen_height(self):
+        screen = self.get_processed_screen()
+        return screen.shape[2]
+
+    def get_screen_width(self):
+        screen = self.get_processed_screen()
+        return screen.shape[3]
+
+    def get_processed_screen(self):
+        screen = self.render('rgb_array').transpose((2, 0, 1)) # PyTorch expects CHW
+        return self.transform_screen_data(screen)
+
+    def crop_screen(self, screen):
+        screen_height = screen.shape[1]
+
+        # Strip off top and bottom
+        top = int(screen_height * 0.4)
+        bottom = int(screen_height * 0.8)
+        screen = screen[:, top:bottom, :]
+        return screen
+
+    def transform_screen_data(self, screen):
+        # Convert to float, rescale, convert to tensor
+        screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
+        screen = torch.from_numpy(screen)
+
+        # Use torchvision package to compose image transforms
+        resize = T.Compose([
+            T.ToPILImage()
+            ,T.Resize((40,90))
+            ,T.ToTensor()
+        ])
+
+        return resize(screen).unsqueeze(0).to(self.device) # add a batch dimension (BCHW)
+
 def plot(values, moving_avg_period):
     plt.figure(2)
     plt.clf()        
     plt.title('Training...')
     plt.xlabel('Episode')
-    plt.ylabel('Duration')
+    plt.ylabel('Score')
     plt.plot(values)
     plt.plot(get_moving_average(moving_avg_period, values))
     plt.pause(0.001)
@@ -222,7 +296,7 @@ if __name__ == '__main__':
     num_episodes = 1000
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    em = CartPoleEnvManager(device)
+    em = LunarLanderEnvManager(device)
     strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
     agent = Agent(strategy, em.num_actions_available(), device)
     memory = ReplayMemory(memory_size)
@@ -233,15 +307,17 @@ if __name__ == '__main__':
     target_net.eval()
     optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
 
-    episode_durations = []
+    episode_rewards = []
 
     for episode in range(num_episodes):
         em.reset()
         state = em.get_state()
+        reward_score = 0
 
         for timestep in count():
             action = agent.select_action(state, policy_net)
             reward = em.take_action(action)
+            reward_score += reward
             next_state = em.get_state()
             memory.push(Experience(state, action, next_state, reward))
             state = next_state
@@ -254,17 +330,18 @@ if __name__ == '__main__':
                 next_q_values = QValues.get_next(target_net, next_states)
                 target_q_values = (next_q_values * gamma) + rewards
 
-                loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
+                loss = F.mse_loss(current_q_values.float(), target_q_values.unsqueeze(1).float())
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
             if em.done:
-                episode_durations.append(timestep)
-                plot(episode_durations, 100)
+                episode_rewards.append(reward_score.cpu())
+                #episode_durations.append(timestep)
+                plot(episode_rewards, 100)
                 break
 
         if episode % target_update == 0:
             target_net.load_state_dict(policy_net.state_dict())
 
-    em.close()
+    em.close() 
