@@ -11,8 +11,8 @@ if __name__ == '__main__':
     agent = Agent(gamma=0.99, epsilon=1.0, batch_size=64, n_actions=4, eps_end=0.01,
                   input_dims=[8], lr=0.005)
     scores, eps_history = [], []
-    avg_score = []
-    n_games = 500
+    avg_scores = []
+    n_games = 1000
     
     for i in range(n_games):
         score = 0
@@ -32,7 +32,8 @@ if __name__ == '__main__':
         eps_history.append(agent.epsilon)
 
         avg_score = np.mean(scores[-100:])
-
+        
+        avg_scores.append(avg_score)
         
         print('episode ', i, 'score %.2f' % score,
                 'average score %.2f' % avg_score,
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     best_avg_game = np.argmax(avg_scores)
     best_avg_score = scores[best_avg_game]
     filename = 'LL-Agent-Performance.png'
-    games = [i for i in range(len(scores))]
+    game = [i for i in range(len(scores))]
     scores_data = pd.DataFrame({"Game":game, "Score":scores})
     sns.scatterplot(x='Game', y='Score', data=scores_data)
     avg_scores_data = pd.DataFrame({'Game':game, 'Average':avg_scores})
