@@ -9,18 +9,29 @@ import numpy as np
 if __name__ == '__main__':
     env = gym.make('LunarLander-v2')
     agent = Agent(gamma=0.99, epsilon=1.0, batch_size=64, n_actions=4, eps_end=0.01,
-                  input_dims=[8], lr=0.005)
+                  input_dims=[8], lr=0.0005)
     scores, eps_history = [], []
     avg_scores = []
-    n_games = 1000
+    n_games = 2000
     
     for i in range(n_games):
         score = 0
         done = False
         observation = env.reset()
+        frame_number = 0
         while not done:
             action = agent.choose_action(observation)
             observation_, reward, done, info = env.step(action)
+
+            # If hasn't landed in 300 frames, negatively reward it           
+            if frame_number > 300:
+                reward -= 0.5
+
+            # If close to the ground and moving fast in y towards ground, negatively reward it
+            if observation_[1] < 0.25 and observation_[3] < -0.75:
+                done = True
+                reward = -5
+                
             score += reward
             agent.store_transition(observation, action, reward, 
                                     observation_, done)
@@ -28,6 +39,9 @@ if __name__ == '__main__':
             observation = observation_
 
             env.render(mode='human')
+
+            frame_number += 1
+
         scores.append(score)
         eps_history.append(agent.epsilon)
 
@@ -49,7 +63,8 @@ if __name__ == '__main__':
     avg_scores_data = pd.DataFrame({'Game':game, 'Average':avg_scores})
     sns.lineplot(x='Game', y='Average', data=avg_scores_data)
     plt.show()
-    #x = [i+1 for i in range(n_games)]
-    #filename = 'lunar_lander.png'
-    #plotLearning(x, scores, eps_history, filename)
+
+    x = [i+1 for i in range(n_games)]
+    filename = 'lunar_lander.png'
+    plotLearning(x, scores, eps_history, filename)
 
